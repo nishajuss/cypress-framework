@@ -1,0 +1,8 @@
+# Use the Node version pinned in .nvmrc when nvm is available, so the hook also
+# works from GUI git clients and shells whose default Node is older.
+if [ -s "$HOME/.nvm/nvm.sh" ]; then
+  . "$HOME/.nvm/nvm.sh" --no-use
+  nvm use --silent >/dev/null 2>&1 || true
+fi
+
+npx lint-staged

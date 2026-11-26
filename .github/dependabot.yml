@@ -1,0 +1,16 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      cypress:
+        patterns: ['cypress', '@badeball/*', '@bahmutov/*']
+      lint:
+        patterns: ['eslint', '@eslint/*', 'eslint-plugin-*', 'typescript-eslint', '@stylistic/*', 'gherkin-lint', 'globals', 'jsonc-eslint-parser']
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

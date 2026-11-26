@@ -1,0 +1,16 @@
+# Dependencies
+node_modules/
+
+# Cypress artefacts
+cypress/videos/
+cypress/screenshots/
+cypress/downloads/
+
+# Reports
+report/
+
+# Local environment overrides
+.env
+
+# OS / editor
+.DS_Store

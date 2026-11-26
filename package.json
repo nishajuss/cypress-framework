@@ -1,0 +1,83 @@
+{
+  "name": "cypress-framework",
+  "version": "1.0.0",
+  "description": "Cypress + Cucumber (BDD) + TypeScript test automation framework covering UI, accessibility and API testing, with parallel execution, HTML reporting and CI.",
+  "author": "Nisha Juss",
+  "license": "MIT",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nishajuss/cypress-framework.git"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "cy:open": "cypress open --e2e --browser chrome --expose tags=\"${TAGS:-not @ignore}\"",
+    "test": "yarn reports:clean && cypress run --browser ${BROWSER:-chrome} --expose tags=\"${TAGS:-not @ignore}\"; code=$?; yarn report; exit $code",
+    "test:smoke": "TAGS=@smoke yarn test",
+    "test:ui": "TAGS=\"@ui and not @ignore\" yarn test",
+    "test:api": "TAGS=\"@api and not @ignore\" yarn test",
+    "test:a11y": "TAGS=\"@a11y and not @ignore\" yarn test",
+    "booker:up": "docker run -d --rm --name restful-booker -p 3001:3001 mwinteringham/restfulbooker@sha256:a87ae093264caf64cad2557256921cbdb1fec466d6356b5e140e3f060b904f04",
+    "booker:down": "docker stop restful-booker",
+    "test:parallel": "yarn reports:clean && tsx scripts/runFeaturesInParallel.ts; code=$?; yarn report; exit $code",
+    "reports:clean": "rm -rf report cypress/screenshots && mkdir -p report/HTML report/JSON",
+    "report": "tsx scripts/exportHTMLReport.ts",
+    "lint": "eslint . && gherkin-lint",
+    "lint:fix": "eslint . --fix",
+    "typecheck": "tsc --noEmit",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@badeball/cypress-cucumber-preprocessor": "28.0.1",
+    "@bahmutov/cypress-esbuild-preprocessor": "2.2.8",
+    "@eslint/js": "10.0.1",
+    "@stylistic/eslint-plugin": "6.0.1",
+    "axe-core": "4.14.1",
+    "chalk": "6.0.1",
+    "cucumber-html-reporter": "^7.2.0",
+    "cypress": "16.3.0",
+    "esbuild": "0.28.2",
+    "eslint": "10.15.0",
+    "eslint-plugin-cypress": "7.0.5",
+    "eslint-plugin-jsonc": "3.4.2",
+    "gherkin-lint": "^4.2.4",
+    "globals": "17.14.0",
+    "husky": "9.1.7",
+    "jsonc-eslint-parser": "^3.1.0",
+    "lint-staged": "17.6.1",
+    "tsx": "4.23.15",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.73.0",
+    "zod": "4.6.7"
+  },
+  "resolutions": {
+    "gherkin-lint/lodash": "4.18.1",
+    "gherkin-lint/**/protobufjs": "7.6.6",
+    "cucumber-html-reporter/uuid": "11.1.1",
+    "cucumber-html-reporter/**/@cucumber/messages/uuid": "11.1.1",
+    "cucumber-html-reporter/**/semver": "7.8.6",
+    "@badeball/cypress-cucumber-preprocessor/glob": "14.0.6",
+    "@badeball/cypress-cucumber-preprocessor/mocha/glob": "14.0.6",
+    "@badeball/cypress-cucumber-preprocessor/**/glob/minimatch": "11.0.9",
+    "**/@typescript-eslint/typescript-estree/minimatch": "11.0.9"
+  },
+  "cypress-cucumber-preprocessor": {
+    "stepDefinitions": "cypress/e2e/step_definitions/**/*.ts",
+    "json": {
+      "enabled": true,
+      "output": "report/JSON/cucumber_report.json"
+    },
+    "filterSpecs": true,
+    "omitFiltered": true
+  },
+  "lint-staged": {
+    "*.{ts,js,mjs,json}": [
+      "eslint --fix"
+    ],
+    "*.feature": [
+      "gherkin-lint"
+    ]
+  }
+}

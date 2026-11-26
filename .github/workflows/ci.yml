@@ -1,0 +1,164 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    # Weekly run to catch changes to SauceDemo, which is tested live.
+    - cron: '0 6 * * 1'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  static-checks:
+    name: Lint & type-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: yarn
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+        env:
+          CYPRESS_INSTALL_BINARY: 0
+
+      - name: Lint (ESLint + gherkin-lint)
+        run: yarn lint
+
+      - name: Type-check
+        run: yarn typecheck
+
+  e2e:
+    name: Cypress tests
+    needs: static-checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # A private copy of the Restful Booker API, so the API scenarios don't depend on a
+    # shared public server being up. Pinned by digest: the image only publishes `latest`.
+    services:
+      restful-booker:
+        image: mwinteringham/restfulbooker@sha256:a87ae093264caf64cad2557256921cbdb1fec466d6356b5e140e3f060b904f04
+        ports:
+          - 3001:3001
+    env:
+      API_BASE_URL: http://localhost:3001
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: yarn
+
+      # A single Cypress process keeps CI deterministic; the suite is small enough that
+      # parallelism saves little here. Use `yarn test:parallel` locally for larger runs.
+      - name: Run Cypress tests
+        uses: cypress-io/github-action@v7
+        with:
+          command: yarn test
+          wait-on: http://localhost:3001/ping
+
+      - name: Write test summary
+        if: ${{ !cancelled() }}
+        run: npx tsx scripts/writeJobSummary.ts "Cypress test results (chrome, full suite)"
+
+      # Named per attempt so a re-run publishes its own report, not the first attempt's.
+      - name: Upload HTML report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: cucumber-report-${{ github.run_attempt }}
+          path: report/
+          if-no-files-found: warn
+
+      - name: Upload failure screenshots
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: cypress-screenshots
+          path: cypress/screenshots/
+          if-no-files-found: ignore
+
+  cross-browser:
+    name: UI tests (${{ matrix.browser }})
+    needs: static-checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [firefox, edge]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: yarn
+
+      # The full suite runs in Chrome above; the UI scenarios also run in Firefox and Edge
+      # to catch browser-specific issues. API scenarios don't depend on the browser.
+      - name: Run UI scenarios
+        uses: cypress-io/github-action@v7
+        with:
+          command: yarn test
+        env:
+          BROWSER: ${{ matrix.browser }}
+          TAGS: '@ui and not @ignore'
+
+      - name: Write test summary
+        if: ${{ !cancelled() }}
+        run: npx tsx scripts/writeJobSummary.ts "Cypress test results (${{ matrix.browser }}, UI scenarios)"
+
+      - name: Upload HTML report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: cucumber-report-${{ matrix.browser }}
+          path: report/
+          if-no-files-found: warn
+
+  publish-report:
+    name: Publish report to GitHub Pages
+    needs: e2e
+    if: ${{ !cancelled() && needs.e2e.result != 'skipped' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: cucumber-report-${{ github.run_attempt }}
+          path: report
+
+      - name: Prepare site
+        run: |
+          mkdir -p _site
+          cp report/HTML/cucumber_report.html _site/index.html
+
+      # Also named per attempt: re-runs can't upload a second artifact with the same name.
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+          name: github-pages-${{ github.run_attempt }}
+
+      - id: deploy
+        uses: actions/deploy-pages@v5
+        with:
+          artifact_name: github-pages-${{ github.run_attempt }}
